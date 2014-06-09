@@ -20,79 +20,108 @@ let ``Boolean serialization`` () =
     let expected = ["true"; "false"] in
     actual |> should equal expected
 
-[<Test>]
-let ``EDN Parser integers`` () =
-    let inputs = ["42"; "-42"; "+42"] in
-    let actual = List.map (fun x -> EdnValue.Parse(x)) inputs in
-    let expected = [EdnValue.Integer 42; EdnValue.Integer -42; EdnValue.Integer 42] in
-    actual |> should equal expected
+[<TestFixture>]
+type ``Given the EDN Parser`` () =
 
-[<Test>]
-let ``EDN Parser floats`` () =
-    let inputs = ["42.0"; "-42.0"; "+42.0"; "16.3"] in
-    let actual = List.map (fun x -> EdnValue.Parse(x)) inputs in
-    let expected = [EdnValue.Float 42.0; EdnValue.Float -42.0; EdnValue.Float 42.0; EdnValue.Float 16.3] in
-    actual |> should equal expected
+    [<Test>] member x.
+        ``when parsing integers`` () =
+            let inputs = ["42"; "-42"; "+42"] in
+            let actual = List.map (fun x -> EdnValue.Parse(x)) inputs in
+            let expected = List.map EdnValue.Integer [42; -42; 42] in
+            actual |> should equal expected
 
-[<Test>]
-let ``EDN Parser simple list`` () =
-    let input = "(1 2 3)" in
-    let actual = EdnValue.Parse input in
-    let expected = EdnValue.EdnList [| EdnValue.Integer 1; EdnValue.Integer 2; EdnValue.Integer 3 |]
-    actual |> should equal expected
+    [<Test>] member x.
+        ``when parsing floats`` () =
+            let inputs = ["42.0"; "-42.0"; "+42.0"; "16.3"] in
+            let actual = List.map (fun x -> EdnValue.Parse(x)) inputs in
+            let expected = List.map EdnValue.Float [42.0; -42.0; 42.0; 16.3] in
+            actual |> should equal expected
 
-[<Test>]
-let ``EDN Parser nested list`` () =
-    let input = "(1 2 (3 4))" in
-    let actual = EdnValue.Parse input in
-    let expected = EdnValue.EdnList [| EdnValue.Integer 1;
-                                       EdnValue.Integer 2;
-                                       (EdnValue.EdnList [| EdnValue.Integer 3; EdnValue.Integer 4 |]) |]
-    actual |> should equal expected
+    [<Test>] member x.
+        ``when parsing simple lists`` () =
+            let input = "(1 2 3)" in
+            let actual = EdnValue.Parse input in
+            let expected = EdnValue.EdnList (Array.map EdnValue.Integer [| 1; 2; 3 |]) in
+            actual |> should equal expected
 
-[<Test>]
-let ``EDN Parser simple vector`` () =
-    let input = "[1 2 3]" in
-    let actual = EdnValue.Parse input in
-    let expected = EdnValue.EdnVector [| EdnValue.Integer 1; EdnValue.Integer 2; EdnValue.Integer 3 |]
-    actual |> should equal expected
+    [<Test>] member x.
+        ``when parsing nested lists`` () =
+            let input = "(1 2 (3 4))" in
+            let actual = EdnValue.Parse input in
+            let expected = EdnValue.EdnList [| EdnValue.Integer 1;
+                                               EdnValue.Integer 2;
+                                               (EdnValue.EdnList [| EdnValue.Integer 3; EdnValue.Integer 4 |]) |] in
+            actual |> should equal expected
 
-[<Test>]
-let ``EDN Parser nested vector`` () =
-    let input = "[1 2 [3 4]]" in
-    let actual = EdnValue.Parse input in
-    let expected = EdnValue.EdnVector [| EdnValue.Integer 1;
-                                       EdnValue.Integer 2;
-                                       (EdnValue.EdnVector [| EdnValue.Integer 3; EdnValue.Integer 4 |]) |]
-    actual |> should equal expected
+    [<Test>] member x.
+        ``when parsing simple vectors`` () =
+            let input = "[1 2 3]" in
+            let actual = EdnValue.Parse input in
+            let expected = EdnValue.EdnVector [| EdnValue.Integer 1; EdnValue.Integer 2; EdnValue.Integer 3 |] in
+            actual |> should equal expected
+
+    [<Test>] member x.
+        ``when parsing nested vectors`` () =
+            let input = "[1 2 [3 4]]" in
+            let actual = EdnValue.Parse input in
+            let expected = EdnValue.EdnVector [| EdnValue.Integer 1;
+                                                 EdnValue.Integer 2;
+                                               (EdnValue.EdnVector [| EdnValue.Integer 3; EdnValue.Integer 4 |]) |] in
+            actual |> should equal expected
                                        
-[<Test>]
-let ``EDN Parser simple set`` () =
-    let input = "#{1 2 3}" in
-    let actual = EdnValue.Parse input in
-    let expected = EdnValue.EdnSet [| EdnValue.Integer 1; EdnValue.Integer 2; EdnValue.Integer 3 |]
-    actual |> should equal expected
+    [<Test>] member x.
+        ``when parsing simple sets`` () =
+            let input = "#{1 2 3}" in
+            let actual = EdnValue.Parse input in
+            let expected = EdnValue.EdnSet [| EdnValue.Integer 1; EdnValue.Integer 2; EdnValue.Integer 3 |] in
+            actual |> should equal expected
 
-[<Test>]
-let ``EDN Parser nested set`` () =
-    let input = "#{1 2 #{3 4}}" in
-    let actual = EdnValue.Parse input in
-    let expected = EdnValue.EdnSet [| EdnValue.Integer 1;
-                                       EdnValue.Integer 2;
-                                       (EdnValue.EdnSet [| EdnValue.Integer 3; EdnValue.Integer 4 |]) |]
-    actual |> should equal expected
+    [<Test>] member x.
+        ``when parsing nested sets`` () =
+            let input = "#{1 2 #{3 4}}" in
+            let actual = EdnValue.Parse input in
+            let expected = EdnValue.EdnSet [| EdnValue.Integer 1;
+                                              EdnValue.Integer 2;
+                                              (EdnValue.EdnSet [| EdnValue.Integer 3; EdnValue.Integer 4 |]) |] in
+            actual |> should equal expected
 
-[<Test>]
-let ``EDN Parser arbitrary nested collections`` () =
-    let input = "[1 2 #{3 4} (5 [6 7]) 8]" in
-    let actual = EdnValue.Parse input in
-    let expected = EdnValue.EdnVector [| EdnValue.Integer 1;
-                                         EdnValue.Integer 2;
-                                         EdnValue.EdnSet [| EdnValue.Integer 3;
-                                                            EdnValue.Integer 4; |];
-                                         EdnValue.EdnList [| EdnValue.Integer 5;
-                                                             EdnValue.EdnVector [| EdnValue.Integer 6;
-                                                                                   EdnValue.Integer 7 |]
-                                                          |];
-                                         EdnValue.Integer 8 |]
-    actual |> should equal expected
+    [<Test>] member x.
+        ``when parsing arbitrarily nested collections`` () =
+            let input = "[1 2 #{3 4} (5 [6 7]) 8]" in
+            let actual = EdnValue.Parse input in
+            let expected = EdnValue.EdnVector [| EdnValue.Integer 1;
+                                                 EdnValue.Integer 2;
+                                                 EdnValue.EdnSet [| EdnValue.Integer 3;
+                                                                    EdnValue.Integer 4; |];
+                                                 EdnValue.EdnList [| EdnValue.Integer 5;
+                                                                     EdnValue.EdnVector [| EdnValue.Integer 6;
+                                                                                           EdnValue.Integer 7 |] |];
+                                                 EdnValue.Integer 8 |] in
+            actual |> should equal expected
+
+    [<Test>] member x.
+        ``when parsing keywords`` () =
+            let inputs = [":foo"; ":user/foo"] in
+            let actual = List.map EdnValue.Parse inputs in
+            let expected = [EdnValue.Keyword { ns = None; keyword = "foo" }
+                            EdnValue.Keyword { ns = Some "user"; keyword = "foo" }] in
+            actual |> should equal expected
+
+    [<Test>] member x.
+        ``when parsing keywords with two colons`` () =
+            (fun () -> EdnValue.Parse "::foo" |> ignore) |> should throw typeof<System.Exception>
+
+    [<Test>] member x.
+        ``when parsing keywords with two slashes`` () =
+            (fun () -> EdnValue.Parse ":foo/bar/baz" |> ignore) |> should throw typeof<System.Exception>
+
+    [<Test>] member x.
+        ``when parsing symbols`` () =
+            let inputs = ["foo"; "true"; "false"; "nil"; "bar/bam" ] in
+            let actual = List.map EdnValue.Parse inputs in
+            let expected = [EdnValue.Symbol { ns = None; symbol = "foo" };
+                            EdnValue.Boolean true;
+                            EdnValue.Boolean false;
+                            EdnValue.Null;
+                            EdnValue.Symbol { ns = Some "bar"; symbol = "bam" }] in
+            actual |> should equal expected

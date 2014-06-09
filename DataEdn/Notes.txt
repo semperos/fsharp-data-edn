@@ -1,0 +1,10 @@
+﻿# Notes #
+
+Because trying to build my FSharp code with comments that contain illegal language constructs in Xamarin is producing failing builds.
+
+## Clojure/EDN Syntax ##
+
+ * int Pattern: "^([-+]?)(?:(0)|([1-9][0-9]*)|0[xX]([0-9A-Fa-f]+)|0([0-7]+)|([1-9][0-9]?)[rR]([0-9A-Za-z]+))(N)?$"
+ * float Pattern: "^([-+]?[0-9]+(\\.[0-9]*)?([eE][-+]?[0-9]+)?)(M)?$"
+ * Symbol Pattern (JVM Clojure): "[:]?([\\D&&[^/]].*/)?(/|[\\D&&[^/]][^/]*)"
+ * Symbol Pattern (ClojureScript): "^[:]?([^0-9/].*/)?([^0-9/][^/]*)$"
