@@ -1,5 +1,6 @@
 ﻿module DataEdn.Tests.EdnValue
 
+open System
 open NUnit.Framework
 open FSharp.Data
 open FsUnit
@@ -68,7 +69,7 @@ type ``Given the EDN Parser`` () =
                                                  EdnValue.Integer 2;
                                                (EdnValue.EdnVector [| EdnValue.Integer 3; EdnValue.Integer 4 |]) |] in
             actual |> should equal expected
-                                       
+
     [<Test>] member x.
         ``when parsing simple sets`` () =
             let input = "#{1 2 3}" in
@@ -100,11 +101,20 @@ type ``Given the EDN Parser`` () =
             actual |> should equal expected
 
     [<Test>] member x.
+        ``when parsing strings`` () =
+            let inputs = ["\"foo\""; "\"foo\\\"bar\"";
+                          "\"foo\\nbar\""; "\"foo\\rbar\""; "\"foo\\tbar\""] in
+            let actual = List.map EdnValue.Parse inputs in
+            let expected = List.map EdnValue.String ["foo"; "foo\"bar";
+                                                     "foo\nbar"; "foo\rbar"; "foo\tbar"] in
+            actual |> should equal expected
+
+    [<Test>] member x.
         ``when parsing keywords`` () =
             let inputs = [":foo"; ":user/foo"] in
             let actual = List.map EdnValue.Parse inputs in
-            let expected = [EdnValue.Keyword { ns = None; keyword = "foo" }
-                            EdnValue.Keyword { ns = Some "user"; keyword = "foo" }] in
+            let expected = [EdnValue.Keyword { ns = None; symbol = "foo" }
+                            EdnValue.Keyword { ns = Some "user"; symbol = "foo" }] in
             actual |> should equal expected
 
     [<Test>] member x.
@@ -124,4 +134,19 @@ type ``Given the EDN Parser`` () =
                             EdnValue.Boolean false;
                             EdnValue.Null;
                             EdnValue.Symbol { ns = Some "bar"; symbol = "bam" }] in
+            actual |> should equal expected
+
+    [<Test>] member x.
+        ``when parsing tagged uuid`` () =
+            let uuid = System.Guid.NewGuid () in
+            let inputs = [uuid] in
+            let actual = List.map (fun x -> EdnValue.Parse ("#uuid \"" + x.ToString() + "\"")) inputs in
+            let expected = [EdnValue.TaggedUuid uuid] in
+            actual |> should equal expected
+
+    [<Test>] member x.
+        ``when parsing tagged inst`` () =
+            let inputs = ["#inst \"2014-01-01T12:00:00.00Z\""] in
+            let actual = List.map EdnValue.Parse inputs in
+            let expected = [EdnValue.TaggedInst(new DateTime(2014, 1, 1, 12, 0, 0))] in
             actual |> should equal expected

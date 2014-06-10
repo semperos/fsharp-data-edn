@@ -16,6 +16,7 @@ open System.IO
 open System.Text
 open System.Text.RegularExpressions
 open System.Globalization
+open System.Xml
 open FSharp.Data
 open FSharp.Data.Runtime
 open FSharp.Data.Runtime.IO
@@ -27,20 +28,6 @@ type EdnSaveOptions =
     | None = 0
     /// Print the EdnValue in one line in a compact way
     | DisableFormatting = 1
-
-type EdnKeyword =
-    { ns: string option;
-      keyword: string }
-
-    member x.ToString =
-        let sb = StringBuilder() in
-        sb.Append ":" |> ignore
-        match x.ns with
-        | Some s -> sb.Append s
-        | None -> sb
-        |> ignore
-        sb.Append x.keyword |> ignore
-        sb.ToString()
 
 type EdnSymbol =
     { ns: string option;
@@ -58,8 +45,11 @@ type EdnSymbol =
 [<RequireQualifiedAccess>]
 type EdnValue =
     | String of string
-    | Keyword of EdnKeyword
+    | Keyword of EdnSymbol
     | Symbol of EdnSymbol
+    | TaggedUuid of Guid
+    | TaggedInst of DateTime
+    | TaggedElement of EdnSymbol
     | Integer of int
     | Float of float
     | EdnMap of properties:(EdnValue * EdnValue)[]
@@ -68,6 +58,7 @@ type EdnValue =
     | EdnSet of elements:EdnValue[]
     | Boolean of bool
     | Comment of string
+    | Discard of EdnValue
     | Null
 
     override x.ToString() = x.ToString(EdnSaveOptions.None)
@@ -87,13 +78,17 @@ type EdnValue =
                 sb.Append right
             match edn with
             | Comment _ -> sb
+            | Discard _ -> sb
             | Null -> sb.Append "nil"
             | Boolean b -> sb.Append(if b then "true" else "false")
             | Integer i -> sb.Append(i.ToString(CultureInfo.InvariantCulture))
             | Float f -> sb.Append(f.ToString(CultureInfo.InvariantCulture))
             | String s -> sb.Append("\"" + EdnValue.EdnStringEncode(s) + "\"")
-            | Keyword k ->  sb.Append k.ToString
+            | Keyword sym ->  sb.Append (":" + sym.ToString)
             | Symbol sym -> sb.Append sym.ToString
+            | TaggedUuid uuid -> sb.Append(uuid.ToString())
+            | TaggedInst inst -> sb.Append(inst.ToString("yyyy-MM-dd'T'HH:mm:ss.ff'Z'"))
+            | TaggedElement sym -> sb.Append ("#" + sym.ToString)
             | EdnMap m ->
                 sb.Append "{" |> ignore
                 for k, v in m do
@@ -162,7 +157,7 @@ type EdnParser(ednText : string, tolerateErrors) =
         ensure (i < s.Length)
         match s.[i] with
         | ';' -> parseComment ()
-        | '"' -> EdnValue.String(parseString ())
+        | '"' -> EdnValue.String(parseString())
         | ':' -> parseKeyword ()
         | '-' -> parseNum ()
         | '+' -> parseNum ()
@@ -175,7 +170,8 @@ type EdnParser(ednText : string, tolerateErrors) =
             ensure (i < s.Length)
             match s.[i] with
             | '{' -> parseDelimited EdnValue.EdnSet '{' '}'
-            | _ -> throw ()
+            | '_' -> parseDiscard ()
+            | _ -> parseTaggedElement ()
         | _ -> parseSymbol ()
 
     and parseComment () =
@@ -188,6 +184,12 @@ type EdnParser(ednText : string, tolerateErrors) =
         | '\r' -> if s.[i + 1] = '\n' then i <- i + 2 else i <- i + 1
         | _ -> i <- i + 1
         EdnValue.Comment(s.Substring(start,len))
+
+    and parseDiscard () =
+        ensure (i < s.Length)
+        skipWhiteSpace ()
+        if i = s.Length then failwith "The discard form '#_' must be followed by an EDN value."
+        EdnValue.Discard(parseValue())
         
     and parseString () =
         ensure (i < s.Length && s.[i] = '"')
@@ -206,6 +208,7 @@ type EdnParser(ednText : string, tolerateErrors) =
                 i <- i + 2 // skip past \ and next char
             else
                 buf.Append(s.[i]) |> ignore
+                i <- i + 1
         ensure (i < s.Length && s.[i] = '"')
         i <- i + 1
         buf.ToString ()
@@ -227,9 +230,9 @@ type EdnParser(ednText : string, tolerateErrors) =
         | t when t.StartsWith ":" -> failwith ("Keywords cannot begin with double colon: :" + token)
         | t when t.Contains "/" ->
             match t.Split [| '/' |] with
-            | [| ns; keyword |] -> EdnValue.Keyword { ns = Some ns; keyword = keyword }
+            | [| ns; keyword |] -> EdnValue.Keyword { ns = Some ns; symbol = keyword }
             | _ -> failwith ("Keywords may only have one '/' to demarcate namespace and keyword name: " + t)
-        | t -> EdnValue.Keyword { ns = None; keyword = t }
+        | t -> EdnValue.Keyword { ns = None; symbol = t }
 
     and parseSymbol () =
         let token = parseToken ()
@@ -242,6 +245,23 @@ type EdnParser(ednText : string, tolerateErrors) =
             | [| ns; symbol |] -> EdnValue.Symbol { ns = Some ns; symbol = symbol }
             | _ -> failwith ("Symbols may only have one '/' to demarcate namespace and symbol name: " + t)
         | t -> EdnValue.Symbol { ns = None; symbol = t }
+
+    and parseTaggedElement () =
+        ensure (i < s.Length)
+        // Do NOT increment i, since tagged literals
+        // can have anything after #, we need all of it
+        let sym = parseSymbol ()
+        let (~~) (func:'a-> unit) (arg:'a) = (func arg) |> fun () -> arg
+        match sym with
+        | EdnValue.Symbol { ns = None; symbol = "uuid" } ->
+            skipWhiteSpace ()
+            EdnValue.TaggedUuid <| Guid.Parse(parseString())
+        | EdnValue.Symbol { ns = None; symbol = "inst" } ->
+            skipWhiteSpace ()
+            EdnValue.TaggedInst <| XmlConvert.ToDateTime(parseString(), XmlDateTimeSerializationMode.Utc)
+        | EdnValue.Symbol { ns = None; symbol = symbol } -> failwith ("User-supplied tagged elements (reader literals) must be namespaced: " + symbol)
+        | EdnValue.Symbol sym -> EdnValue.TaggedElement sym
+        | _ -> throw ()
     
     and parseNum () =
         ensure (i < s.Length)
